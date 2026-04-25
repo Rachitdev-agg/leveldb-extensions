@@ -75,6 +75,13 @@ class LEVELDB_EXPORT DB {
   // Note: consider setting options.sync = true.
   virtual Status Delete(const WriteOptions& options, const Slice& key) = 0;
 
+  // Added the delete header here delete all keys in [start_key, end_key).
+  // implemented by writing one Delete tombstone per currently-visible
+  //  key in range, physical removal happens later during compaction. 
+  // Returns OK (with no effect) if start_key >= end_key.
+  virtual Status DeleteRange(const WriteOptions& options, const Slice& start_key,
+                             const Slice& end_key) = 0;
+    
   // Apply the specified updates to the database.
   // Returns OK on success, non-OK on failure.
   // Note: consider setting options.sync = true.
