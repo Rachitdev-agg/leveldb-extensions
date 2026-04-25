@@ -9,6 +9,8 @@
 #include <deque>
 #include <set>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "db/dbformat.h"
 #include "db/log_writer.h"
@@ -42,6 +44,9 @@ class DBImpl : public DB {
   Status Write(const WriteOptions& options, WriteBatch* updates) override;
   Status Get(const ReadOptions& options, const Slice& key,
              std::string* value) override;
+  Status Scan(const ReadOptions& options, 
+              const Slice& start_key, const Slice& end_key,
+              std::vector<std::pair<std::string, std::string>>* result) override;
   Iterator* NewIterator(const ReadOptions&) override;
   const Snapshot* GetSnapshot() override;
   void ReleaseSnapshot(const Snapshot* snapshot) override;

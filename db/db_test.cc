@@ -2125,6 +2125,12 @@ class ModelDB : public DB {
     assert(false);  // Not implemented
     return Status::NotFound(key);
   }
+  Status Scan(const ReadOptions& options, const Slice& start_key,
+              const Slice& end_key,
+              std::vector<std::pair<std::string, std::string>>* result) override {
+    assert(false);  // not used by existing tests, asModelDB is a test helper
+    return Status::NotSupported("Scan not implemented in ModelDB");
+  }
   Iterator* NewIterator(const ReadOptions& options) override {
     if (options.snapshot == nullptr) {
       KVMap* saved = new KVMap;

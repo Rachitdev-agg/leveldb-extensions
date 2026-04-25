@@ -1165,6 +1165,36 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   return s;
 }
 
+Status DBImpl::Scan(const ReadOptions& options,
+                    const Slice& start_key,
+                    const Slice& end_key,
+                    std::vector<std::pair<std::string, std::string>>* result) {
+  result->clear();
+  // start >= end is an empty range, not an error
+  if (start_key.compare(end_key) >= 0) return Status::OK();
+
+  // NewIterator gives a merged, snapshot-consistent view over memtable +
+  // immutable + all SSTables. it already filters tombstones and keeps only
+  // the newest sequence per user key, so we just seek and walk.
+  Iterator* it = NewIterator(options);
+  it->Seek(start_key);
+
+  while (it->Valid()) {
+    Slice k = it->key();
+    if (k.compare(end_key) >= 0) break;
+
+    std::string key_str = k.ToString();
+    std::string val_str = it->value().ToString();
+    result->push_back(std::make_pair(key_str, val_str));
+
+    it->Next();
+  }
+
+  Status s = it->status();
+  delete it;
+  return s;
+}
+
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;
