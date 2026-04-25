@@ -2131,6 +2131,11 @@ class ModelDB : public DB {
     assert(false);  // not used by existing tests, asModelDB is a test helper
     return Status::NotSupported("Scan not implemented in ModelDB");
   }
+  Status DeleteRange(const WriteOptions& options, const Slice& start_key,
+                     const Slice& end_key) override {
+    assert(false);  // not exercised by existing tests
+    return Status::NotSupported("DeleteRange not implemented in ModelDB");
+  }
   Iterator* NewIterator(const ReadOptions& options) override {
     if (options.snapshot == nullptr) {
       KVMap* saved = new KVMap;

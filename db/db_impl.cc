@@ -1195,6 +1195,36 @@ Status DBImpl::Scan(const ReadOptions& options,
   return s;
 }
 
+Status DBImpl::DeleteRange(const WriteOptions& options,
+                           const Slice& start_key,
+                           const Slice& end_key) {
+  // empty range
+  if (start_key.compare(end_key) >= 0) return Status::OK();
+
+  // phase 1: walk the range with an iterator and queue a Delete tombstone
+  // for every currently-visible key. default ReadOptions => latest state.
+  WriteBatch batch;
+  ReadOptions ropts;
+  Iterator* it = NewIterator(ropts);
+  it->Seek(start_key);
+
+  while (it->Valid()) {
+    Slice k = it->key();
+    if (k.compare(end_key) >= 0) break;
+    batch.Delete(k);
+    it->Next();
+  }
+
+  Status s = it->status();
+  delete it;
+  if (!s.ok()) return s;
+
+  // phase 2: commit the whole batch atomically. Write() takes mutex_,
+  // appends to the WAL, inserts into the memtable, and triggers a
+  // background compaction if needed -- same path as Put / Delete.
+  return Write(options, &batch);
+}
+
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;
