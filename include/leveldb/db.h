@@ -7,6 +7,9 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
@@ -86,6 +89,15 @@ class LEVELDB_EXPORT DB {
   // May return some other Status on an error.
   virtual Status Get(const ReadOptions& options, const Slice& key,
                      std::string* value) = 0;
+
+  // Added the scan header here
+  // Returns all key-value pairs in [start_key, end_key). If a snapshot 
+  // is supplied via options, the scan reflects that snapshot;
+  //  otherwise it returns the latest visible version of each key 
+  // (consistent with Get) and returns an empty result if start_key >= end_key.
+  virtual Status Scan(const ReadOptions& options,
+                      const Slice& start_key, const Slice& end_key,
+                      std::vector<std::pair<std::string, std::string>>* result) = 0;
 
   // Return a heap-allocated iterator over the contents of the database.
   // The result of NewIterator() is initially invalid (caller must
