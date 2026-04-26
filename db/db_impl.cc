@@ -1041,6 +1041,12 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     stats.bytes_written += compact->outputs[i].file_size;
   }
+  int total_in = 0;
+  for(int w = 0; w < 2; w++){
+    total_in += compact->compaction->num_input_files(w);
+  }
+  stats.input_files = total_in;
+  stats.output_files = (int)compact->outputs.size();
 
   mutex_.Lock();
   stats_[compact->compaction->level() + 1].Add(stats);
