@@ -1249,6 +1249,21 @@ Status DBImpl::ForceFullCompaction() {
   bool ok = true;
   int num_levels = config::kNumLevels;
 
+  // snapshot all level stats before we start so we can diff at the end
+  int64_t br_start = 0;
+  int64_t bw_start = 0;
+  int fin_start = 0;
+  int fout_start = 0;
+  {
+    MutexLock l(&mutex_);
+    for(int i = 0; i < num_levels; i++){
+      br_start += stats_[i].bytes_read;
+      bw_start += stats_[i].bytes_written;
+      fin_start += stats_[i].input_files;
+      fout_start += stats_[i].output_files;
+    }
+  }
+
   for(int lev = 0; lev < num_levels - 1; lev++){
     // check if there are actually any files sitting at this level
     int nf = 0;
@@ -1295,6 +1310,30 @@ Status DBImpl::ForceFullCompaction() {
     MutexLock l(&mutex_);
     return bg_error_;
   }
+
+  // snapshot stats after all compactions finished, diff against start
+  int64_t br_end = 0;
+  int64_t bw_end = 0;
+  int fin_end = 0;
+  int fout_end = 0;
+  {
+    MutexLock l(&mutex_);
+    for(int i = 0; i < num_levels; i++){
+      br_end += stats_[i].bytes_read;
+      bw_end += stats_[i].bytes_written;
+      fin_end += stats_[i].input_files;
+      fout_end += stats_[i].output_files;
+    }
+  }
+
+  printf("\n=== ForceFullCompaction done ===\n");
+  printf("compactions run  : %d\n", n_comp);
+  printf("input files      : %d\n", fin_end - fin_start);
+  printf("output files     : %d\n", fout_end - fout_start);
+  printf("bytes read       : %lld\n", (long long)(br_end - br_start));
+  printf("bytes written    : %lld\n", (long long)(bw_end - bw_start));
+  printf("================================\n");
+
   return Status::OK();
 }
 
