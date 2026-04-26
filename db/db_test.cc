@@ -2136,6 +2136,10 @@ class ModelDB : public DB {
     assert(false);  // not exercised by existing tests
     return Status::NotSupported("DeleteRange not implemented in ModelDB");
   }
+  Status ForceFullCompaction() override {
+    assert(false);
+    return Status::NotSupported("ForceFullCompaction not implemented in ModelDB");
+  }
   Iterator* NewIterator(const ReadOptions& options) override {
     if (options.snapshot == nullptr) {
       KVMap* saved = new KVMap;
