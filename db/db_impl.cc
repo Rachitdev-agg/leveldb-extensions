@@ -1231,6 +1231,73 @@ Status DBImpl::DeleteRange(const WriteOptions& options,
   return Write(options, &batch);
 }
 
+Status DBImpl::ForceFullCompaction() {
+  // flush whatever is in the memtable to disk first
+  // same idea as TEST_CompactMemTable but written out directly
+  Status flush_s = Write(WriteOptions(), nullptr);
+  if(!flush_s.ok()) return flush_s;
+  {
+    MutexLock l(&mutex_);
+    while(imm_ != nullptr && bg_error_.ok() &&
+          !shutting_down_.load(std::memory_order_acquire)){
+      background_work_finished_signal_.Wait();
+    }
+    if(imm_ != nullptr) return bg_error_;
+  }
+
+  int n_comp = 0;
+  bool ok = true;
+  int num_levels = config::kNumLevels;
+
+  for(int lev = 0; lev < num_levels - 1; lev++){
+    // check if there are actually any files sitting at this level
+    int nf = 0;
+    {
+      MutexLock l(&mutex_);
+      nf = versions_->NumLevelFiles(lev);
+    }
+    if(nf == 0) continue;
+
+    // set up a manual compaction over the full key range of this level
+    ManualCompaction mc;
+    mc.level = lev;
+    mc.done = false;
+    mc.begin = nullptr;
+    mc.end = nullptr;
+
+    {
+      MutexLock l(&mutex_);
+      while(!mc.done && !shutting_down_.load(std::memory_order_acquire) &&
+            bg_error_.ok()){
+        if(manual_compaction_ == nullptr){
+          manual_compaction_ = &mc;
+          MaybeScheduleCompaction();
+        } else {
+          background_work_finished_signal_.Wait();
+        }
+      }
+      while(background_compaction_scheduled_){
+        background_work_finished_signal_.Wait();
+      }
+      if(manual_compaction_ == &mc){
+        manual_compaction_ = nullptr;
+      }
+      if(!bg_error_.ok()){
+        ok = false;
+      }
+    }
+
+    if(!ok) break;
+    n_comp++;
+  }
+
+  if(!ok){
+    MutexLock l(&mutex_);
+    return bg_error_;
+  }
+  return Status::OK();
+}
+
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;
