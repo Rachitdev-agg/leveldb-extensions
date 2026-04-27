@@ -145,6 +145,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
+      fc_running_(false),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {}
@@ -1128,6 +1129,9 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
                    std::string* value) {
   Status s;
   MutexLock l(&mutex_);
+  while(fc_running_){
+    background_work_finished_signal_.Wait();
+  }
   SequenceNumber snapshot;
   if (options.snapshot != nullptr) {
     snapshot =
@@ -1245,6 +1249,12 @@ Status DBImpl::ForceFullCompaction() {
     if(imm_ != nullptr) return bg_error_;
   }
 
+  // block all reads and writes while we compact
+  {
+    MutexLock l(&mutex_);
+    fc_running_ = true;
+  }
+
   int n_comp = 0;
   bool ok = true;
   int num_levels = config::kNumLevels;
@@ -1308,6 +1318,8 @@ Status DBImpl::ForceFullCompaction() {
 
   if(!ok){
     MutexLock l(&mutex_);
+    fc_running_ = false;
+    background_work_finished_signal_.SignalAll();
     return bg_error_;
   }
 
@@ -1326,6 +1338,12 @@ Status DBImpl::ForceFullCompaction() {
     }
   }
 
+  {
+    MutexLock l(&mutex_);
+    fc_running_ = false;
+    background_work_finished_signal_.SignalAll();
+  }
+
   printf("\n=== ForceFullCompaction done ===\n");
   printf("compactions run  : %d\n", n_comp);
   printf("input files      : %d\n", fin_end - fin_start);
@@ -1338,6 +1356,12 @@ Status DBImpl::ForceFullCompaction() {
 }
 
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
+  {
+    MutexLock l(&mutex_);
+    while(fc_running_){
+      background_work_finished_signal_.Wait();
+    }
+  }
   SequenceNumber latest_snapshot;
   uint32_t seed;
   Iterator* iter = NewInternalIterator(options, &latest_snapshot, &seed);
@@ -1382,6 +1406,9 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   w.done = false;
 
   MutexLock l(&mutex_);
+  while(fc_running_){
+    background_work_finished_signal_.Wait();
+  }
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
